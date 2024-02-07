@@ -3,6 +3,7 @@ package org.example;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.*;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
@@ -10,12 +11,14 @@ public class Main {
         for (int i = 0; i < texts.length; i++) {
             texts[i] = generateText("aab", 30_000);
         }
-
-        List<Thread> threads = new ArrayList<>();
+        // Создаём пул потоков по доступному количеству ядер
+        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        //Список потоков
+        List<Future<Integer>> threads = new ArrayList<Future<Integer>>();
         long startTs = System.currentTimeMillis(); // start time
         for (String text : texts) {
-            //складываем каждую строку в отдельный поток
-            Thread thread = new Thread(() -> {
+            //задание для каждого нового потока
+            Callable task = () -> {
                 int maxSize = 0;
                 for (int i = 0; i < text.length(); i++) {
                     for (int j = 0; j < text.length(); j++) {
@@ -34,15 +37,27 @@ public class Main {
                         }
                     }
                 }
-                System.out.println(text.substring(0, 100) + " -> " + maxSize);
+                return maxSize;
+            };
+            // Отправляем задачу на выполнение в пул потоков
+            Future<Integer> newTask = executor.submit(task);
+            threads.add(newTask);//добавляем в массив потоков каждый новый
+
+        }
+        // Завершаем работу пула потоков
+        executor.shutdown();
+        //чтобы приеопать результат работы каждого потока
+        List<Integer> maxValues = new ArrayList<>();
+        for (Future<Integer> fut : threads) {
+            try {
+                // складываем результат
+                maxValues.add(fut.get());
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
             }
-            );
-            threads.add(thread);//добавляем в массив потоков каждый новый
-            thread.start();//стартуем поток
         }
-        for (Thread thread_1 : threads) {
-            thread_1.join(); // зависаем, ждём когда поток объект которого лежит в thread завершится
-        }
+        //получаем максимальное значение и выводим на экран
+        System.out.println(maxValues.stream().max(Integer::compareTo).get());
         long endTs = System.currentTimeMillis(); // end time
 
         System.out.println("Time: " + (endTs - startTs) + "ms");
